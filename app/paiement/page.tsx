@@ -64,7 +64,7 @@ export default function PaymentPage() {
     
     // Simulation du paiement
     setTimeout(() => {
-      alert("Paiement simulé avec succès ! Merci pour votre commande.")
+     
       router.push("/")
     }, 2000)
   }
