@@ -61,10 +61,10 @@ export default function PaymentPage() {
     setProcessing(true)
     const whatsappLink = await sendData()
     window.open(whatsappLink, "_blank")
-    
+
     // Simulation du paiement
     setTimeout(() => {
-     
+
       router.push("/")
     }, 2000)
   }
@@ -84,19 +84,19 @@ export default function PaymentPage() {
     })
 
     // Construction du message WhatsApp avec emojis et formatage
-    const message = `🛒 *NOUVELLE COMMANDE* 🛒
+    const message = `🛒 *NOUVELLE COMMANDE* 🛒\n
 
-📋 *Détails de la commande:*
-➖ *Produit:* ${product?.nom || 'Non spécifié'}
-➖ *Quantité:* ${quantity}
-➖ *Prix unitaire:* ${product?.prix || 0} XAF
-➖ *Total:* ${total} XAF
+📋 *Détails de la commande:*\n
+➖ *Produit:* ${product?.nom || 'Non spécifié'}\n
+➖ *Quantité:* ${quantity}\n
+➖ *Prix unitaire:* ${product?.prix || 0} XAF\n
+➖ *Total:* ${total} XAF\n
 
-👤 *Informations client:*
-➖ *Nom:* ${nomClient}
-➖ *Téléphone:* ${phoneClient}
-➖ *Email:* ${emailClient}
-➖ *Adresse:* ${adresseClient}
+👤 *Informations client:*\n
+➖ *Nom:* ${nomClient}\n
+➖ *Téléphone:* ${phoneClient}\n
+➖ *Email:* ${emailClient}\n
+➖ *Adresse:* ${adresseClient}\n
 
 📅 *Date de commande:* ${new Date().toLocaleDateString('fr-FR', {
       day: '2-digit',
@@ -111,8 +111,9 @@ Merci pour votre confiance ! 💙`
     const messageToSend = encodeURIComponent(message)
     const whatsappLink = `https://wa.me/237677519251?text=${messageToSend}`
 
-    // Hachage des données pour Facebook CAPI
+    // Envoi direct à Facebook Conversions API
     try {
+      // Hachage des données pour Facebook CAPI
       const [hashedEmail, hashedPhone, hashedFirstName, hashedLastName] = await Promise.all([
         hashSHA256(emailClient),
         hashSHA256(phoneClient),
@@ -120,31 +121,37 @@ Merci pour votre confiance ! 💙`
         hashSHA256(nomClient.split(' ')[1] || '')
       ])
 
+      // Configuration Facebook API
+      const FACEBOOK_PIXEL_ID = "1428443261691540"
+      const FACEBOOK_ACCESS_TOKEN = "EAAYFqusjE9UBPCBx8VJ6NblZBhJ0fNDTkbwBM2ZAzzFrmDKZBUT4MBsbgTMZAkGyJb6OwUqDkdpaCHCKCYh7S7cab1IDBOXBPZA9aZAsaNjoWOjVduLMZAPd1fcDu08XmZA1ZCgIzUA8Mey0Bfq54lNZCbnh64uTtePH4uOVidJbOvW8B7BZCLCR4UZBI7MRgZCtPOfQu3wZDZD"
+
       const eventData = {
-        event_name: "Purchase",
-        event_time: Math.floor(Date.now() / 1000),
-        user_data: {
-          em: [hashedEmail],
-          ph: [hashedPhone],
-          fn: [hashedFirstName],
-          ln: [hashedLastName],
-          client_ip_address: "", // À remplir côté serveur si possible
-          client_user_agent: navigator.userAgent,
-        },
-        custom_data: {
-          currency: "XAF",
-          value: total,
-          contents: [{
-            id: product?.id.toString() || "N/A",
-            quantity: quantity,
-            item_price: product?.prix || 0
-          }],
-          delivery_address: adresseClient || "Non spécifiée"
-        }
+        data: [{
+          event_name: "Purchase",
+          event_time: Math.floor(Date.now() / 1000),
+          action_source: "website",
+          user_data: {
+            em: [hashedEmail],
+            ph: [hashedPhone],
+            fn: [hashedFirstName],
+            ln: [hashedLastName],
+            client_ip_address: "", // À remplir côté serveur si possible
+            client_user_agent: navigator.userAgent,
+          },
+          custom_data: {
+            currency: "XAF",
+            value: total,
+            contents: [{
+              id: product?.id.toString() || "N/A",
+              quantity: quantity,
+              item_price: product?.prix || 0
+            }]
+          }
+        }]
       }
 
-      // Envoi au webhook Make
-      const response = await fetch('https://hook.eu2.make.com/wz56i7bq5w3y1fdqswxomha4mrrtt8go', {
+      // Envoi direct à Facebook Conversions API
+      const facebookResponse = await fetch(`https://graph.facebook.com/v23.0/${FACEBOOK_PIXEL_ID}/events?access_token=${FACEBOOK_ACCESS_TOKEN}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -152,13 +159,33 @@ Merci pour votre confiance ! 💙`
         body: JSON.stringify(eventData)
       })
 
-      if (!response.ok) {
-        console.error('Erreur lors de l\'envoi à Facebook CAPI:', await response.text())
+      if (!facebookResponse.ok) {
+        const errorText = await facebookResponse.text()
+        console.error('Erreur lors de l\'envoi à Facebook CAPI:', errorText)
       } else {
-        console.log('Données envoyées avec succès à Facebook CAPI')
+        const result = await facebookResponse.json()
+        console.log('Données envoyées avec succès à Facebook CAPI:', result)
       }
+
+      // Optionnel : Envoi parallèle au webhook Make (si vous voulez conserver les deux)
+      /*
+      const makeResponse = await fetch('https://hook.eu2.make.com/wz56i7bq5w3y1fdqswxomha4mrrtt8go', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData.data[0])
+      })
+  
+      if (!makeResponse.ok) {
+        console.error('Erreur lors de l\'envoi à Make:', await makeResponse.text())
+      } else {
+        console.log('Données envoyées avec succès à Make')
+      }
+      */
+
     } catch (error) {
-      console.error('Erreur lors de la préparation des données:', error)
+      console.error('Erreur lors de l\'envoi des données:', error)
     }
 
     return whatsappLink
