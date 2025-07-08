@@ -77,15 +77,32 @@ export default function ProductPage() {
             fill
             className="object-cover"
           /> */}
-          <img src={product.image_url || "/placeholder.svg?height=300&width=300"} alt={product.nom}/>
+          <img src={product.image_url || "/placeholder.svg?height=300&width=300"} alt={product.nom} />
+
         </div>
 
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-4">{product.nom}</h1>
             <p className="text-4xl font-bold text-blue-600 mb-6">{product.prix} XAF</p>
+            <div className="bg-gradient-to-r from-yellow-100 to-orange-100 border-l-4 border-orange-400 p-3 mb-3 rounded-r-lg">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <span className="text-2xl">🔥</span>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-bold text-orange-800">
+                    OFFRE SPÉCIALE !
+                  </p>
+                  <p className="text-xs text-orange-700">
+                    Achetez-en 1, recevez le 2ème GRATUIT
+                  </p>
+                </div>
+              </div>
+            </div>
             <p className="text-gray-700 leading-relaxed">{product.description}</p>
           </div>
+
 
           <div className="space-y-4">
             <div>
@@ -110,7 +127,7 @@ export default function ProductPage() {
               onClick={handlePurchase}
               className="w-full bg-blue-600 text-white py-3 px-6 rounded-md text-lg font-semibold hover:bg-blue-700 transition-colors"
             >
-    Passer à l&apos;achat - {(product.prix * quantity).toFixed(2)} XAF
+              Passer à l&apos;achat - {(product.prix * quantity).toFixed(2)} XAF
             </button>
           </div>
         </div>
