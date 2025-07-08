@@ -67,7 +67,7 @@ export default function PaymentPage() {
       alert("Paiement simulé avec succès ! Merci pour votre commande.")
       router.push("/")
     }, 2000)
-    window.open(sendData(), "_blank")
+    window.open(await sendData(), "_blank")
   }
 
   if (loading) {
@@ -98,7 +98,7 @@ export default function PaymentPage() {
   }
   const total = product.prix * quantity
 
-  function sendData() {
+  async function sendData() {
     // Récupération et validation des données utilisateur
     const nomClient = formData.nom?.trim() || '';
     const phoneClient = formData.phone?.trim() || '';
@@ -153,7 +153,7 @@ export default function PaymentPage() {
     };
 
     // Envoi asynchrone au webhook Make
-    fetch('https://hook.eu2.make.com/wz56i7bq5w3y1fdqswxomha4mrrtt8go', {
+    await fetch('https://hook.eu2.make.com/wz56i7bq5w3y1fdqswxomha4mrrtt8go', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
