@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase, type Product } from "@/lib/supabase"
@@ -20,7 +19,6 @@ export default function PaymentPage() {
     adresse: "",
   })
 
-
   useEffect(() => {
     const productId = searchParams.get("produit")
     const qty = searchParams.get("quantite")
@@ -32,10 +30,10 @@ export default function PaymentPage() {
       router.push("/")
     }
   }, [searchParams, router])
+
   async function fetchProduct(id: string) {
     try {
       const { data, error } = await supabase.from("produits").select("*").eq("id", id).single()
-
       if (error) throw error
       setProduct(data)
     } catch (error) {
@@ -61,13 +59,123 @@ export default function PaymentPage() {
     }
 
     setProcessing(true)
-
+    const whatsappLink = await sendData()
+    window.open(whatsappLink, "_blank")
+    
     // Simulation du paiement
     setTimeout(() => {
       alert("Paiement simulé avec succès ! Merci pour votre commande.")
       router.push("/")
     }, 2000)
-    window.open(await sendData(), "_blank")
+  }
+
+  async function sendData(): Promise<string> {
+    const nomClient = formData.nom?.trim() || ''
+    const phoneClient = formData.phone?.trim() || ''
+    const emailClient = formData.email?.trim() || ''
+    const adresseClient = formData.adresse?.trim() || ''
+    const total = product ? product.prix * quantity : 0
+
+    console.log('Informations client:', {
+      nom: nomClient,
+      phone: phoneClient,
+      email: emailClient,
+      adresse: adresseClient
+    })
+
+    // Construction du message WhatsApp avec emojis et formatage
+    const message = `🛒 *NOUVELLE COMMANDE* 🛒
+
+📋 *Détails de la commande:*
+➖ *Produit:* ${product?.nom || 'Non spécifié'}
+➖ *Quantité:* ${quantity}
+➖ *Prix unitaire:* ${product?.prix || 0} XAF
+➖ *Total:* ${total} XAF
+
+👤 *Informations client:*
+➖ *Nom:* ${nomClient}
+➖ *Téléphone:* ${phoneClient}
+➖ *Email:* ${emailClient}
+➖ *Adresse:* ${adresseClient}
+
+📅 *Date de commande:* ${new Date().toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}
+
+Merci pour votre confiance ! 💙`
+
+    const messageToSend = encodeURIComponent(message)
+    const whatsappLink = `https://wa.me/237677519251?text=${messageToSend}`
+
+    // Hachage des données pour Facebook CAPI
+    try {
+      const [hashedEmail, hashedPhone, hashedFirstName, hashedLastName] = await Promise.all([
+        hashSHA256(emailClient),
+        hashSHA256(phoneClient),
+        hashSHA256(nomClient.split(' ')[0]),
+        hashSHA256(nomClient.split(' ')[1] || '')
+      ])
+
+      const eventData = {
+        event_name: "Purchase",
+        event_time: Math.floor(Date.now() / 1000),
+        user_data: {
+          em: [hashedEmail],
+          ph: [hashedPhone],
+          fn: [hashedFirstName],
+          ln: [hashedLastName],
+          client_ip_address: "", // À remplir côté serveur si possible
+          client_user_agent: navigator.userAgent,
+        },
+        custom_data: {
+          currency: "XAF",
+          value: total,
+          contents: [{
+            id: product?.id.toString() || "N/A",
+            quantity: quantity,
+            item_price: product?.prix || 0
+          }],
+          delivery_address: adresseClient || "Non spécifiée"
+        }
+      }
+
+      // Envoi au webhook Make
+      const response = await fetch('https://hook.eu2.make.com/wz56i7bq5w3y1fdqswxomha4mrrtt8go', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData)
+      })
+
+      if (!response.ok) {
+        console.error('Erreur lors de l\'envoi à Facebook CAPI:', await response.text())
+      } else {
+        console.log('Données envoyées avec succès à Facebook CAPI')
+      }
+    } catch (error) {
+      console.error('Erreur lors de la préparation des données:', error)
+    }
+
+    return whatsappLink
+  }
+
+  async function hashSHA256(data: string): Promise<string> {
+    if (!data) return ""
+    try {
+      const encoder = new TextEncoder()
+      const buffer = await crypto.subtle.digest('SHA-256', encoder.encode(data))
+      return Array.from(new Uint8Array(buffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+    } catch (error) {
+      console.error('Erreur lors du hachage:', error)
+      return ""
+    }
   }
 
   if (loading) {
@@ -96,129 +204,8 @@ export default function PaymentPage() {
       </div>
     )
   }
+
   const total = product.prix * quantity
-
-  async function sendData() {
-    // Récupération et validation des données utilisateur
-    const nomClient = formData.nom?.trim() || '';
-    const phoneClient = formData.phone?.trim() || '';
-    const emailClient = formData.email?.trim() || '';
-    const adresseClient = formData.adresse?.trim() || '';
-
-    console.log('Informations client:', {
-      nom: nomClient,
-      phone: phoneClient,
-      email: emailClient,
-      adresse: adresseClient
-    });
-
-    // Sauvegarde des données via API route
-    saveToCSV({
-      nom: nomClient,
-      phone: phoneClient,
-      email: emailClient,
-      adresse: adresseClient,
-      produit: product?.nom || '',
-      quantite: quantity || 0,
-      prixUnitaire: product?.prix || 0,
-      total: total || 0
-    });
-
-    // Construction du message WhatsApp
-    const message = `Salut, je souhaite passer une commande...`; // (votre message existant)
-    const messageToSend = encodeURIComponent(message);
-    const whatsappLink = `https://wa.me/237677519251?text=${messageToSend}`;
-
-    // ===== ENVOI VERS LE WEBHOOK MAKE (Facebook CAPI) =====
-    const eventData = {
-      event_name: "Purchase", // ou "Lead" si c'est une demande de contact
-      event_time: Math.floor(Date.now() / 1000), // Timestamp en secondes
-      user_data: {
-        em: hashSHA256(emailClient), // Email hashé (voir fonction ci-dessous)
-        ph: hashSHA256(phoneClient), // Téléphone hashé
-        fn: hashSHA256(nomClient.split(' ')[0]), // Prénom hashé (optionnel)
-        ln: hashSHA256(nomClient.split(' ')[1] || ''), // Nom hashé (optionnel)
-        client_ip_address: "", // Récupérable côté serveur (ex: req.ip)
-        client_user_agent: navigator.userAgent,
-      },
-      custom_data: {
-        currency: "XAF", // ou "EUR" selon votre devise
-        value: total || 0, // Montant total
-        contents: [{
-          id: product?.id || "N/A", // ID du produit
-          quantity: quantity || 1
-        }],
-        delivery_address: adresseClient // Optionnel
-      }
-    };
-
-    // Envoi asynchrone au webhook Make
-    await fetch('https://hook.eu2.make.com/wz56i7bq5w3y1fdqswxomha4mrrtt8go', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(eventData)
-    })
-      .then(response => {
-        if (!response.ok) throw new Error('Erreur webhook');
-        console.log('Données envoyées à Make avec succès');
-      })
-      .catch(error => {
-        console.error('Erreur:', error);
-      });
-
-    return whatsappLink;
-  }
-
-  // ===== FONCTION DE HACHAGE SHA256 (nécessaire pour Facebook) =====
-  async function hashSHA256(data: string | undefined) {
-    if (!data) return "";
-    const encoder = new TextEncoder();
-    const buffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
-    return Array.from(new Uint8Array(buffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-
-  // Fonction pour envoyer les données à l'API route
-  async function saveToCSV(data: unknown) {
-    try {
-      const response = await fetch('/api/save-contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (response.ok) {
-        console.log('Données sauvegardées avec succès dans contacts.csv');
-      } else {
-        console.error('Erreur lors de la sauvegarde');
-      }
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde CSV:', error);
-    }
-  }
-
-  // Fonction pour télécharger le fichier CSV
-  // function downloadCSV(csvContent, filename) {
-  //   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  //   const link = document.createElement('a');
-
-  //   if (link.download !== undefined) {
-  //     const url = URL.createObjectURL(blob);
-  //     link.setAttribute('href', url);
-  //     link.setAttribute('download', filename);
-  //     link.style.visibility = 'hidden';
-  //     document.body.appendChild(link);
-  //     link.click();
-  //     document.body.removeChild(link);
-  //   }
-  // }
-
-
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -230,12 +217,12 @@ export default function PaymentPage() {
           <span>
             {product.nom} x {quantity}
           </span>
-          <span className="font-semibold">{total.toFixed(2)} Xaf</span>
+          <span className="font-semibold">{total.toFixed(2)} XAF</span>
         </div>
         <div className="border-t pt-2 mt-2">
           <div className="flex justify-between items-center font-bold text-lg">
             <span>Total</span>
-            <span>{total.toFixed(2)} Xaf</span>
+            <span>{total.toFixed(2)} XAF</span>
           </div>
         </div>
       </div>
@@ -245,11 +232,11 @@ export default function PaymentPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label htmlFor="prenom" className="block text-sm font-medium text-gray-700 mb-2">
-              Telephone *
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+              Téléphone *
             </label>
             <input
-              type="number"
+              type="tel"
               id="phone"
               name="phone"
               value={formData.phone}
@@ -261,7 +248,7 @@ export default function PaymentPage() {
 
           <div>
             <label htmlFor="nom" className="block text-sm font-medium text-gray-700 mb-2">
-              Nom *
+              Nom complet *
             </label>
             <input
               type="text"
@@ -308,14 +295,11 @@ export default function PaymentPage() {
         <button
           type="submit"
           disabled={processing}
-
           className="w-full bg-green-600 text-white py-3 px-6 rounded-md text-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {processing ? "Traitement en cours..." : `Payer ${total.toFixed(2)} Xaf`}
+          {processing ? "Traitement en cours..." : `Payer ${total.toFixed(2)} XAF`}
         </button>
       </form>
     </div>
   )
-
-
 }
