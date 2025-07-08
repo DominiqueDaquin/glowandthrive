@@ -19,7 +19,7 @@ export default function PaymentPage() {
     email: "",
     adresse: "",
   })
- 
+
 
   useEffect(() => {
     const productId = searchParams.get("produit")
@@ -104,14 +104,14 @@ export default function PaymentPage() {
     const phoneClient = formData.phone?.trim() || '';
     const emailClient = formData.email?.trim() || '';
     const adresseClient = formData.adresse?.trim() || '';
-  
+
     console.log('Informations client:', {
       nom: nomClient,
       phone: phoneClient,
       email: emailClient,
       adresse: adresseClient
     });
-  
+
     // Sauvegarde des données via API route
     saveToCSV({
       nom: nomClient,
@@ -123,33 +123,66 @@ export default function PaymentPage() {
       prixUnitaire: product?.prix || 0,
       total: total || 0
     });
-  
-    // Construction du message WhatsApp avec informations citées
-    const message = `Salut, je souhaite passer une commande pour le produit suivant:
-  
-  📦 *DÉTAILS DE LA COMMANDE*
-  - *Nom du produit*: "${product?.nom}"
-  - *Quantité*: ${quantity}
-  - *Prix unitaire*: ${product?.prix} Fcfa
-  - *Total*: ${total} Fcfa
-  
-  👤 *=== MES INFORMATIONS ===*
-  - *Nom*: "${nomClient}"
-  - *Téléphone*: "${phoneClient}"
-  - *Email*: "${emailClient}"
-  - *Adresse*: "${adresseClient}"
-  
- *Date de commande*:${new Date().toLocaleDateString('fr-FR')}`;
-  
+
+    // Construction du message WhatsApp
+    const message = `Salut, je souhaite passer une commande...`; // (votre message existant)
     const messageToSend = encodeURIComponent(message);
-    const link = `https://wa.me/237677519251?text=${messageToSend}`;
-  
-    return link;
+    const whatsappLink = `https://wa.me/237677519251?text=${messageToSend}`;
+
+    // ===== ENVOI VERS LE WEBHOOK MAKE (Facebook CAPI) =====
+    const eventData = {
+      event_name: "Purchase", // ou "Lead" si c'est une demande de contact
+      event_time: Math.floor(Date.now() / 1000), // Timestamp en secondes
+      user_data: {
+        em: hashSHA256(emailClient), // Email hashé (voir fonction ci-dessous)
+        ph: hashSHA256(phoneClient), // Téléphone hashé
+        fn: hashSHA256(nomClient.split(' ')[0]), // Prénom hashé (optionnel)
+        ln: hashSHA256(nomClient.split(' ')[1] || ''), // Nom hashé (optionnel)
+        client_ip_address: "", // Récupérable côté serveur (ex: req.ip)
+        client_user_agent: navigator.userAgent,
+      },
+      custom_data: {
+        currency: "XAF", // ou "EUR" selon votre devise
+        value: total || 0, // Montant total
+        contents: [{
+          id: product?.id || "N/A", // ID du produit
+          quantity: quantity || 1
+        }],
+        delivery_address: adresseClient // Optionnel
+      }
+    };
+
+    // Envoi asynchrone au webhook Make
+    fetch('https://hook.eu2.make.com/wz56i7bq5w3y1fdqswxomha4mrrtt8go', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData)
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('Erreur webhook');
+        console.log('Données envoyées à Make avec succès');
+      })
+      .catch(error => {
+        console.error('Erreur:', error);
+      });
+
+    return whatsappLink;
   }
-  
+
+  // ===== FONCTION DE HACHAGE SHA256 (nécessaire pour Facebook) =====
+  async function hashSHA256(data: string | undefined) {
+    if (!data) return "";
+    const encoder = new TextEncoder();
+    const buffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
+    return Array.from(new Uint8Array(buffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
   // Fonction pour envoyer les données à l'API route
-  async function saveToCSV(data: unknown)
-   {
+  async function saveToCSV(data: unknown) {
     try {
       const response = await fetch('/api/save-contact', {
         method: 'POST',
@@ -158,7 +191,7 @@ export default function PaymentPage() {
         },
         body: JSON.stringify(data),
       });
-  
+
       if (response.ok) {
         console.log('Données sauvegardées avec succès dans contacts.csv');
       } else {
@@ -168,12 +201,12 @@ export default function PaymentPage() {
       console.error('Erreur lors de la sauvegarde CSV:', error);
     }
   }
-  
+
   // Fonction pour télécharger le fichier CSV
   // function downloadCSV(csvContent, filename) {
   //   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   //   const link = document.createElement('a');
-    
+
   //   if (link.download !== undefined) {
   //     const url = URL.createObjectURL(blob);
   //     link.setAttribute('href', url);
@@ -184,8 +217,8 @@ export default function PaymentPage() {
   //     document.body.removeChild(link);
   //   }
   // }
-  
-  
+
+
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -275,7 +308,7 @@ export default function PaymentPage() {
         <button
           type="submit"
           disabled={processing}
-         
+
           className="w-full bg-green-600 text-white py-3 px-6 rounded-md text-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {processing ? "Traitement en cours..." : `Payer ${total.toFixed(2)} Xaf`}
