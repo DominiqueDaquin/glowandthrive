@@ -125,10 +125,12 @@ Merci pour votre confiance ! 💙`
       const FACEBOOK_PIXEL_ID = "1428443261691540"
       const FACEBOOK_ACCESS_TOKEN = "EAAYFqusjE9UBPCBx8VJ6NblZBhJ0fNDTkbwBM2ZAzzFrmDKZBUT4MBsbgTMZAkGyJb6OwUqDkdpaCHCKCYh7S7cab1IDBOXBPZA9aZAsaNjoWOjVduLMZAPd1fcDu08XmZA1ZCgIzUA8Mey0Bfq54lNZCbnh64uTtePH4uOVidJbOvW8B7BZCLCR4UZBI7MRgZCtPOfQu3wZDZD"
 
+      const eventId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       const eventData = {
         data: [{
           event_name: "Purchase",
           event_time: Math.floor(Date.now() / 1000),
+          event_id: eventId,
           action_source: "website",
           user_data: {
             em: [hashedEmail],
@@ -137,6 +139,7 @@ Merci pour votre confiance ! 💙`
             ln: [hashedLastName],
             client_ip_address: "", // À remplir côté serveur si possible
             client_user_agent: navigator.userAgent,
+            external_id: [`customer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`],
           },
           custom_data: {
             currency: "XAF",
