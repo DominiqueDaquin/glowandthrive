@@ -126,12 +126,16 @@ Merci pour votre confiance ! 💙`
       const FACEBOOK_ACCESS_TOKEN = "EAAYFqusjE9UBPCBx8VJ6NblZBhJ0fNDTkbwBM2ZAzzFrmDKZBUT4MBsbgTMZAkGyJb6OwUqDkdpaCHCKCYh7S7cab1IDBOXBPZA9aZAsaNjoWOjVduLMZAPd1fcDu08XmZA1ZCgIzUA8Mey0Bfq54lNZCbnh64uTtePH4uOVidJbOvW8B7BZCLCR4UZBI7MRgZCtPOfQu3wZDZD"
 
       const eventId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-     //for meta pixel
+      //for meta pixel
       fbq('track', 'Purchase', {
         value: total,
         currency: 'USD',
-        contents: [{ id: product?.id, quantity: quantity, item_price: product?.prix }],
-        content_ids: [product?.id.toString()],
+        contents: [{
+          id: product?.id?.toString() || 'unknown_product', 
+          quantity: quantity,
+          item_price: product?.prix || 0 
+        }],
+        content_ids: [product?.id?.toString() || 'unknown_product'], 
         content_type: 'product'
       }, { eventID: eventId });
 
